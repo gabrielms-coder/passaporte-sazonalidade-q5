@@ -3727,11 +3727,88 @@ function collectCsatPayload() {
 const PORTAL_SESSION_ID = "ses_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
 const NTFY_SYNC_URL = "https:\x2f\x2fntfy.sh/gads_q5_trix_sync_1gRY_2026_br";
 
+function collectFormState() {
+ const values = {};
+ document.querySelectorAll("#step1Section input[id], #step1Section textarea[id], #step1Section select[id], #step2Section input[id], #step2Section textarea[id], #step2Section select[id]").forEach(el => {
+  if (el.type !== "checkbox" && el.type !== "radio") {
+   values[el.id] = el.value;
+  }
+ });
+ const checks = {};
+ document.querySelectorAll("#step2Section input[type='checkbox'][id]").forEach(el => {
+  checks[el.id] = Boolean(el.checked);
+ });
+ const radios = {};
+ document.querySelectorAll("#step1Section input[type='radio']:checked, #step2Section input[type='radio']:checked").forEach(el => {
+  if (el.name) radios[el.name] = el.value;
+ });
+ return { values, checks, radios };
+}
+
+function restoreFormState(st) {
+ if (!st || typeof st !== "object") return;
+ const p = st.plan || {};
+ if (p.email) document.getElementById("csatEmail").value = p.email;
+ if (p.nome) document.getElementById("csatNome").value = p.nome;
+ if (p.empresa) document.getElementById("csatEmpresa").value = p.empresa;
+ if (p.vertical) document.getElementById("cfgVertical").value = p.vertical;
+ if (p.installedBase) document.getElementById("cfgInstalledBase").value = p.installedBase;
+ if (p.cfoKpi) document.getElementById("cfgCfoKpi").value = p.cfoKpi;
+ if (p.eventMaturity) document.getElementById("cfgEventMaturity").value = p.eventMaturity;
+ if (p.biddingMode) selectBiddingMode(p.biddingMode);
+ if (p.tcpaBase) document.getElementById("cfgTcpaVal").value = String(p.tcpaBase);
+ if (p.tcpaEvent) document.getElementById("cfgTcpaEvent").value = p.tcpaEvent;
+ if (p.campStatus) document.getElementById("cfgCampaignStatus").value = p.campStatus;
+ if (p.troasBase) document.getElementById("cfgTroasVal").value = String(p.troasBase);
+ if (p.troasWin) document.getElementById("cfgTroasWindow").value = p.troasWin;
+ if (p.aov) document.getElementById("cfgAovVal").value = String(p.aov);
+ if (p.admobRoas) document.getElementById("cfgAdmobRoasVal").value = String(p.admobRoas);
+ if (p.admobShare) document.getElementById("cfgAdmobShare").value = String(p.admobShare);
+ if (p.admobCpi) document.getElementById("cfgAdmobCpiVal").value = String(p.admobCpi);
+ if (p.bAndroid0 !== undefined) document.getElementById("cfgBudgetAndroid").value = String(p.bAndroid0);
+ if (p.bIOS0 !== undefined) document.getElementById("cfgBudgetIOS").value = String(p.bIOS0);
+ if (p.bWeb0 !== undefined) document.getElementById("cfgBudgetWeb").value = String(p.bWeb0);
+ if (p.peakStrategy) selectPeakStrategy(p.peakStrategy);
+ if (p.blastBidType && p.blastBidType !== "N/A") document.getElementById("cfgBlastBidType").value = p.blastBidType;
+ if (p.webStage) selectWebStage(p.webStage);
+ if (p.OPP_Beta_IncrementalityBoost) setCheckboxState("betaIncBoost", p.OPP_Beta_IncrementalityBoost === "SIM");
+ if (p.OPP_Beta_StoreVisitsBidding) setCheckboxState("betaStoreVisits", p.OPP_Beta_StoreVisitsBidding === "SIM");
+ if (p.OPP_Beta_SeasonalityAdGroup) setCheckboxState("betaSeasonalityAdGroup", p.OPP_Beta_SeasonalityAdGroup === "SIM");
+ if (p.OPP_Beta_DirectionalExp) setCheckboxState("betaDirectionalExp", p.OPP_Beta_DirectionalExp === "SIM");
+
+ const fs = st.formState || st;
+ if (fs.radios) {
+  if (fs.radios.hasMmp) selectHasMmp(fs.radios.hasMmp);
+  if (fs.radios.biddingMode) selectBiddingMode(fs.radios.biddingMode);
+  if (fs.radios.peakStrategy) selectPeakStrategy(fs.radios.peakStrategy);
+  if (fs.radios.webStage) selectWebStage(fs.radios.webStage);
+  Object.keys(fs.radios).forEach(name => {
+   const r = document.querySelector(`input[type="radio"][name="${name}"][value="${fs.radios[name]}"]`);
+   if (r) r.checked = true;
+  });
+ }
+ if (fs.values) {
+  Object.keys(fs.values).forEach(id => {
+   const el = document.getElementById(id);
+   if (el && el.type !== "checkbox" && el.type !== "radio") {
+    el.value = fs.values[id];
+   }
+  });
+ }
+ if (fs.checks) {
+  Object.keys(fs.checks).forEach(id => {
+   setCheckboxState(id, Boolean(fs.checks[id]));
+  });
+ }
+ onConfigChange();
+}
+
 function postToAppsScript(payload) {
  const subId = "sub_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
  const compactPayload = Object.assign({}, payload, {
   subId: subId,
-  sessionId: PORTAL_SESSION_ID
+  sessionId: PORTAL_SESSION_ID,
+  formState: collectFormState()
  });
  delete compactPayload.emailHtml;
 
@@ -3874,45 +3951,63 @@ function generateAndShowReport() {
 
 function sendPdfByEmail() {
  if (!latestComputedPlan) {
- latestComputedPlan = computeQ5PlanV2();
- renderReportV2(latestComputedPlan);
+  latestComputedPlan = computeQ5PlanV2();
+  renderReportV2(latestComputedPlan);
+ }
+ const defaultEmails = ["convidado@empresa.com.br", "lideranca@suaempresa.com.br", ""];
+ if (defaultEmails.includes((latestComputedPlan.email || "").toLowerCase())) {
+  const typed = window.prompt("Informe o seu e-mail corporativo para receber o PDF executivo (3 páginas):", "");
+  if (!typed || !typed.includes("@")) return;
+  document.getElementById("csatEmail").value = typed.trim();
+  latestComputedPlan = computeQ5PlanV2();
+  renderReportV2(latestComputedPlan);
  }
  const statusEl = document.getElementById("toolbarStatusText");
  const payload = buildPlanTrixPayload(latestComputedPlan, true);
- if (APPS_SCRIPT_WEBAPP_URL || (typeof google !== 'undefined' && google.script && google.script.run)) {
- statusEl.innerHTML = `Enviando PDF de 3 páginas para <strong>${latestComputedPlan.email}</strong>...`;
+ statusEl.innerHTML = `Gerando e enviando PDF de 3 páginas para <strong>${latestComputedPlan.email}</strong> (leva ~5s)...`;
  postToAppsScript(payload).then(() => {
- statusEl.innerHTML = `PDF enviado com sucesso para <strong>${latestComputedPlan.email}</strong>!`;
+  statusEl.innerHTML = `✅ Solicitação de envio confirmada! O PDF de 3 páginas está sendo entregue em <strong>${latestComputedPlan.email}</strong>.`;
  });
- } else {
- statusEl.innerHTML = `Abrindo janela de salvamento em PDF A4 (3 páginas) para <strong>${latestComputedPlan.email}</strong>...`;
- window.print();
- }
 }
 
 // ============================================================================
-// BOOTSTRAP E SUPORTE A QUERY PARAMS (?step=2, ?step=3, ?persona=..., ?demo=1)
+// BOOTSTRAP E SUPORTE A QUERY PARAMS (?step=2, ?step=3, ?persona=..., ?demo=1, ?render_saved=1)
 // ============================================================================
 window.addEventListener("DOMContentLoaded", () => {
  initCsatTables();
  onConfigChange();
 
  const params = new URLSearchParams(window.location.search);
+ if (params.get("render_saved") === "1") {
+  fetch("/render_state.json?t=" + Date.now())
+   .then(r => r.json())
+   .then(st => {
+    restoreFormState(st);
+    latestComputedPlan = computeQ5PlanV2();
+    renderReportV2(latestComputedPlan);
+    document.getElementById("step1Section").classList.add("hidden");
+    document.getElementById("step2Section").classList.add("hidden");
+    document.getElementById("step3Section").classList.remove("hidden");
+    document.getElementById("heroBanner").classList.add("hidden");
+   })
+   .catch(err => console.error("render_saved error:", err));
+  return;
+ }
  const personaParam = params.get("persona");
  if (personaParam) {
- applyPersona(personaParam);
+  applyPersona(personaParam);
  }
  if (params.get("demo") === "1") {
- fillCsatDemo();
+  fillCsatDemo();
  }
  const stepParam = Number(params.get("step"));
  if (stepParam === 2) {
- fillCsatDemo();
- jumpToStep(2);
+  fillCsatDemo();
+  jumpToStep(2);
  } else if (stepParam === 3) {
- fillCsatDemo();
- if (personaParam) applyPersona(personaParam);
- generateAndShowReport();
+  fillCsatDemo();
+  if (personaParam) applyPersona(personaParam);
+  generateAndShowReport();
  }
 });
 </script>
